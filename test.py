@@ -9,6 +9,8 @@ openmeteo = openmeteo_requests.Client()
 # Make sure all required weather variables are listed here
 # The order of variables in hourly or daily is important to assign them correctly below
 url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
+
+# inspiratie bron: https://discuss.streamlit.io/t/label-and-values-in-in-selectbox/1436/5
 locations = {
     "De Bilt": (52.11, 5.1806),
     "Leeuwarden": (53.2014, 5.8086),
@@ -65,5 +67,7 @@ for response in responses:
 	daily_data["rain_sum"] = daily_rain_sum
 
 	daily_dataframe = pd.DataFrame(data = daily_data)
-sl.title(f"Min temperatuur in {city}")
-sl.line_chart(daily_dataframe.set_index('date')['temperature_2m_min'])
+sl.header(f"Min en Max temperatuur in {city}")
+sl.line_chart(data=daily_data, x="date", y=["temperature_2m_max", "temperature_2m_min"], x_label="Datum", y_label="Temperatuur in ℃", color=["#BB4648", "#7AC2EC"])
+sl.header(f"Neerslag in {city}")
+sl.bar_chart(data=daily_data, x="date", y="rain_sum", y_label="Totaal regenval", x_label="Datum")
