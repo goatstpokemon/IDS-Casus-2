@@ -17,7 +17,7 @@ locations = {
     "Enschede": (52.2183, 6.8958),
 }
 city = sl.selectbox("Selecteer locatie", options=list(locations.keys()))
-sl.header(f"Huidige Locatie: {city}")
+
 lat, lon = locations[city]
 params = {
     "latitude": lat,
@@ -65,5 +65,5 @@ for response in responses:
 	daily_data["rain_sum"] = daily_rain_sum
 
 	daily_dataframe = pd.DataFrame(data = daily_data)
-sl.title("Min temperatuur in Nederland")
+sl.title(f"Min temperatuur in {city}")
 sl.line_chart(daily_dataframe.set_index('date')['temperature_2m_min'])
