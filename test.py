@@ -19,6 +19,7 @@ locations = {
     "Enschede": (52.2183, 6.8958),
 }
 city = sl.selectbox("Selecteer locatie", options=list(locations.keys()))
+sl.header("Kies tijdsperiode")
 
 lat, lon = locations[city]
 params = {
@@ -68,8 +69,62 @@ for response in responses:
 
 	daily_dataframe = pd.DataFrame(data = daily_data)
 sl.header(f"Min en Max temperatuur in {city}")
-sl.line_chart(data=daily_data, x="date", y=["temperature_2m_max", "temperature_2m_min"], x_label="Datum", y_label="Temperatuur in ℃", color=["#BB4648", "#7AC2EC"])
+
+sl.line_chart(data=daily_data, x="date", y=["temperature_2m_max", "temperature_2m_min"], x_label="Datum", y_label="Temperatuur in ℃", color=["#BB4648", "#7AC2EC"] )
 sl.header(f"Neerslag in {city}")
 sl.bar_chart(data=daily_data, x="date", y="rain_sum", y_label="Totaal regenval", x_label="Datum")
-sl.header(f"Zonlichturen in {city}")
-sl.bar_chart(data=daily_data, x="date", y="daylight_duration", y_label="Totale zonnenuren", x_label="Datum")
+
+
+min_temp = int(daily_dataframe['temperature_2m_min'].min())
+max_temp = int(daily_dataframe['temperature_2m_max'].max())
+
+temp_range = sl.slider(
+	"Temperatuur bereik in ℃", max_value=max_temp, min_value=min_temp, value=(min_temp, max_temp),
+	step=1
+)
+
+min,max = temp_range
+filtered = daily_dataframe[(daily_data['temperature_2m_min'] >= min) & (daily_data['temperature_2m_max'] <= max)].copy()
+
+sl.line_chart(data=filtered, x="date", y=['temperature_2m_min', 'temperature_2m_max'],color=["#7AC2EC","#BB4648" ])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# sl.header(f"Gemiddelde zonlichturen in {city}")
+# daily_dataframe["year"] = daily_dataframe["date"].dt.year
+# daily_dataframe["month"] = daily_dataframe["date"].dt.month
+# year = sl.selectbox(
+#     "Selecteer jaar",
+#     options=sorted(daily_dataframe["year"].unique()),
+# )
+
+# filtered = daily_dataframe[
+#     (daily_dataframe["year"] == year) & (daily_dataframe["month"] == month)
+# ].copy()
+
+# sl.line_chart(
+#     data=filtered,
+#     x="date",
+#     y="daylight_duration",
+#     y_label="Gemiddelde zonlichturen",
+#     x_label="Datum",
+#     color="#F8C57C",
+# )
+# sl.map(data=daily_data)
