@@ -18,7 +18,7 @@ locations = {
     "Maastricht": (50.8483, 5.6889),
     "Enschede": (52.2183, 6.8958),
 }
-sl.markdown("# Thuispagina 🦩")
+sl.markdown("# Homepagina 🦩")
 city = sl.selectbox("Selecteer locatie", options=list(locations.keys()))
 
 
@@ -98,3 +98,59 @@ filtered = daily_dataframe[(daily_data['temperature_2m_min'] >= min) & (daily_da
 
 sl.line_chart(data=filtered, x="date", y=['temperature_2m_min', 'temperature_2m_max'],color=["#7AC2EC","#BB4648" ])
 
+# Choose rain types
+
+
+
+def main_page():
+    sl.markdown("# Homepagina 🦩")
+
+
+def page2():
+    sl.markdown("# All locations 📍")
+
+
+page_names_to_funcs = {
+    "Homepagina": main_page,
+    "Alle Locaties": page2
+
+}
+selected_page = sl.sidebar.selectbox("Select a page", page_names_to_funcs.keys())
+page_names_to_funcs[selected_page]()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# sl.header(f"Gemiddelde zonlichturen in {city}")
+# daily_dataframe["year"] = daily_dataframe["date"].dt.year
+# daily_dataframe["month"] = daily_dataframe["date"].dt.month
+# year = sl.selectbox(
+#     "Selecteer jaar",
+#     options=sorted(daily_dataframe["year"].unique()),
+# )
+
+# filtered = daily_dataframe[
+#     (daily_dataframe["year"] == year) & (daily_dataframe["month"] == month)
+# ].copy()
+
+# sl.line_chart(
+#     data=filtered,
+#     x="date",
+#     y="daylight_duration",
+#     y_label="Gemiddelde zonlichturen",
+#     x_label="Datum",
+#     color="#F8C57C",
+# )
+# sl.map(data=daily_data)
