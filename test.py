@@ -18,8 +18,20 @@ locations = {
     "Maastricht": (50.8483, 5.6889),
     "Enschede": (52.2183, 6.8958),
 }
+sl.markdown("# Homepagina 🦩")
 city = sl.selectbox("Selecteer locatie", options=list(locations.keys()))
-sl.header("Kies tijdsperiode")
+
+
+# page_element="""
+# <style>
+# [data-testid="stAppViewContainer"]{
+
+#   background: #
+# }
+# </style>
+# """
+
+# sl.markdown(page_element, unsafe_allow_html=True)
 
 lat, lon = locations[city]
 params = {
@@ -68,9 +80,7 @@ for response in responses:
 	daily_data["rain_sum"] = daily_rain_sum
 
 	daily_dataframe = pd.DataFrame(data = daily_data)
-sl.header(f"Min en Max temperatuur in {city}")
 
-sl.line_chart(data=daily_data, x="date", y=["temperature_2m_max", "temperature_2m_min"], x_label="Datum", y_label="Temperatuur in ℃", color=["#BB4648", "#7AC2EC"] )
 sl.header(f"Neerslag in {city}")
 sl.bar_chart(data=daily_data, x="date", y="rain_sum", y_label="Totaal regenval", x_label="Datum")
 
@@ -88,9 +98,25 @@ filtered = daily_dataframe[(daily_data['temperature_2m_min'] >= min) & (daily_da
 
 sl.line_chart(data=filtered, x="date", y=['temperature_2m_min', 'temperature_2m_max'],color=["#7AC2EC","#BB4648" ])
 
+# Choose rain types
 
 
 
+def main_page():
+    sl.markdown("# Homepagina 🦩")
+
+
+def page2():
+    sl.markdown("# All locations 📍")
+
+
+page_names_to_funcs = {
+    "Homepagina": main_page,
+    "Alle Locaties": page2
+
+}
+selected_page = sl.sidebar.selectbox("Select a page", page_names_to_funcs.keys())
+page_names_to_funcs[selected_page]()
 
 
 
