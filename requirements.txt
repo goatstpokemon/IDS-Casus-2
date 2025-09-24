@@ -1,0 +1,3 @@
+openmeteo_requests
+streamlit
+pandas
