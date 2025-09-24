@@ -1,28 +1,39 @@
 import openmeteo_requests
 import streamlit as sl
 import pandas as pd
-import datetime
-import requests_cache
-from retry_requests import retry
 
 # Setup the Open-Meteo API client with cache and retry on error
-cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
-retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-openmeteo = openmeteo_requests.Client(session = retry_session)
+openmeteo = openmeteo_requests.Client()
+
 
 # Make sure all required weather variables are listed here
 # The order of variables in hourly or daily is important to assign them correctly below
 url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
-twoDays = datetime.date.today() - datetime.timedelta(days=2)
-
-params = {
-	"latitude": 52.374,
-	"longitude": 4.8897,
-	"start_date": "2021-01-01",
-	"end_date": twoDays,
-	"daily": ["weather_code", "temperature_2m_max", "temperature_2m_min", "daylight_duration", "rain_sum"],
-	"hourly": "temperature_2m",
+locations = {
+    "De Bilt": (52.11, 5.1806),
+    "Leeuwarden": (53.2014, 5.8086),
+    "Zandvoort": (52.3713, 4.5331),
+    "Maastricht": (50.8483, 5.6889),
+    "Enschede": (52.2183, 6.8958),
 }
+city = sl.selectbox("Selecteer locatie", options=list(locations.keys()))
+sl.header(f"Huidige Locatie: {city}")
+lat, lon = locations[city]
+params = {
+    "latitude": lat,
+    "longitude": lon,
+    "start_date": "2021-01-01",
+    "end_date": "2025-01-01",
+    "daily": [
+        "weather_code",
+        "temperature_2m_max",
+        "temperature_2m_min",
+        "daylight_duration",
+        "rain_sum",
+    ],
+    "hourly": "temperature_2m",
+}
+
 responses = openmeteo.weather_api(url, params=params)
 
 # Process 5 locations
@@ -56,4 +67,3 @@ for response in responses:
 	daily_dataframe = pd.DataFrame(data = daily_data)
 sl.title("Min temperatuur in Nederland")
 sl.line_chart(daily_dataframe.set_index('date')['temperature_2m_min'])
-
