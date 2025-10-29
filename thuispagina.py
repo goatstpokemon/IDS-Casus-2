@@ -1,13 +1,11 @@
 import openmeteo_requests
 import streamlit as sl
 import pandas as pd
-
+import streamlit_shadcn_ui as ui
 # Setup the Open-Meteo API client with cache and retry on error
 openmeteo = openmeteo_requests.Client()
 
 
-# Make sure all required weather variables are listed here
-# The order of variables in hourly or daily is important to assign them correctly below
 url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 
 # inspiratie bron: https://discuss.streamlit.io/t/label-and-values-in-in-selectbox/1436/5
@@ -19,19 +17,15 @@ locations = {
     "Enschede": (52.2183, 6.8958),
 }
 sl.markdown("# Homepagina 🦩")
-city = sl.selectbox("Selecteer locatie", options=list(locations.keys()))
+# city = sl.selectbox("Selecteer locatie", options=list(locations.keys()))
+city = ui.tabs(options=['De Bilt', 'Leeuwarden', 'Zandvoort', 'Maastricht', 'Enschede'], default_value='De Bilt', key="location_tabs")
+
+sl.
 
 
-# page_element="""
-# <style>
-# [data-testid="stAppViewContainer"]{
 
-#   background: #
-# }
-# </style>
-# """
 
-# sl.markdown(page_element, unsafe_allow_html=True)
+
 
 lat, lon = locations[city]
 params = {
@@ -102,21 +96,7 @@ sl.line_chart(data=filtered, x="date", y=['temperature_2m_min', 'temperature_2m_
 
 
 
-def main_page():
-    sl.markdown("# Homepagina 🦩")
 
-
-def page2():
-    sl.markdown("# All locations 📍")
-
-
-page_names_to_funcs = {
-    "Homepagina": main_page,
-    "Alle Locaties": page2
-
-}
-selected_page = sl.sidebar.selectbox("Select a page", page_names_to_funcs.keys())
-page_names_to_funcs[selected_page]()
 
 
 
