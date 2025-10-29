@@ -531,3 +531,72 @@ try:
 
 except Exception as e:
     st.error(f"Fout bij het berekenen van de voorspelling: {str(e)}")
+
+import streamlit as st
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import numpy as np
+
+st.set_page_config(layout="wide")
+st.title("Nederland — Huidige Temperatuur")
+
+@st.cache_data(ttl=600)
+def fetch_temperature_grid():
+    url = "https://api.open-meteo.com/v1/forecast"
+    lats = np.linspace(50.75, 53.5, 15)
+    lons = np.linspace(3.4, 7.2, 15)
+    lon_grid, lat_grid = np.meshgrid(lons, lats)
+
+    lat_flat = lat_grid.flatten()
+    lon_flat = lon_grid.flatten()
+
+    temps = []
+    for lat, lon in zip(lat_flat, lon_flat):
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "current": "temperature_2m",
+            "timezone": "Europe/Amsterdam"
+        }
+        resp = requests.get(url, params=params)
+        temps.append(resp.json()["current"]["temperature_2m"])
+
+    temp_grid = np.array(temps).reshape(lat_grid.shape)
+    return lon_grid, lat_grid, temp_grid
+
+lon_grid, lat_grid, temp_grid = fetch_temperature_grid()
+
+fig, ax = plt.subplots(
+    subplot_kw={"projection": ccrs.Stereographic(
+        central_latitude=52.1,
+        central_longitude=5.3
+    )},
+    figsize=(20, 20)
+)
+
+ax.set_extent([3.4, 7.2, 50.75, 53.5], crs=ccrs.PlateCarree())
+ax.add_feature(cfeature.BORDERS, linewidth=0.5)
+ax.add_feature(cfeature.COASTLINE, linewidth=0.5)
+ax.gridlines(draw_labels=False, alpha=0.3)
+
+cf = ax.contourf(
+    lon_grid, lat_grid, temp_grid,
+    cmap="coolwarm",
+    transform=ccrs.PlateCarree(),
+    levels=15
+)
+cbar = plt.colorbar(cf, ax=ax, orientation="vertical", pad=0.02)
+cbar.set_label("Temperatuur (°C)")
+ax.set_title("Nederland — Huidige Temperatuur (Top-Down)")
+
+st.pyplot(fig)
+
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Min Temperatuur", f"{temp_grid.min():.1f}°C")
+col2.metric("Gemiddelde Temperatuur", f"{temp_grid.mean():.1f}°C")
+col3.metric("Max Temperatuur", f"{temp_grid.max():.1f}°C")
+
