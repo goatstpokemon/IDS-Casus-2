@@ -2,244 +2,238 @@ import openmeteo_requests
 import streamlit as sl
 import pandas as pd
 import streamlit_shadcn_ui as ui
-# Setup the Open-Meteo API client with cache and retry on error
+
+# Initialize API client
 openmeteo = openmeteo_requests.Client()
 
+# Constants
+WEATHER_CODES = {
+    0: "Helder",
+    1: "Vrijwel helder",
+    2: "Gedeeltelijk bewolkt",
+    3: "Bewolkt",
+    45: "Mist",
+    48: "Mist met rijp",
+    51: "Motregen: Licht",
+    53: "Motregen: Matig",
+    55: "Motregen: Dicht",
+    56: "Vriesende motregen: Licht",
+    57: "Vriesende motregen: Dicht",
+    61: "Regen: Licht",
+    63: "Regen: Matig",
+    65: "Regen: Zwaar",
+    66: "Vriesende regen: Licht",
+    67: "Vriesende regen: Zwaar",
+    71: "Sneeuwval: Licht",
+    73: "Sneeuwval: Matig",
+    75: "Sneeuwval: Zwaar",
+    77: "Sneeuwkorrels",
+    80: "Buien: Licht",
+    81: "Buien: Matig",
+    82: "Buien: Hevig",
+    85: "Sneeuwbuien: Licht",
+    86: "Sneeuwbuien: Zwaar"
+}
 
-url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
-
-# inspiratie bron: https://discuss.streamlit.io/t/label-and-values-in-in-selectbox/1436/5
-locations = {
+LOCATIONS = {
     "De Bilt": (52.11, 5.1806),
     "Leeuwarden": (53.2014, 5.8086),
     "Zandvoort": (52.3713, 4.5331),
     "Maastricht": (50.8483, 5.6889),
     "Enschede": (52.2183, 6.8958),
 }
-sl.markdown("# Homepagina 🦩")
-# city = sl.selectbox("Selecteer locatie", options=list(locations.keys()))
-city = ui.tabs(options=['De Bilt', 'Leeuwarden', 'Zandvoort', 'Maastricht', 'Enschede'], default_value='De Bilt', key="location_tabs")
 
-
-
-
-
-
-lat, lon = locations[city]
-params = {
-    "latitude": lat,
-    "longitude": lon,
-    "start_date": "2021-01-01",
-    "end_date": "2025-01-01",
-    "daily": [
-        "weather_code",
-        "temperature_2m_max",
-        "temperature_2m_min",
-        "daylight_duration",
-        "rain_sum",
-    ],
-    "hourly": "temperature_2m",
+API_URLS = {
+    "historical": "https://historical-forecast-api.open-meteo.com/v1/forecast",
+    "current": "https://api.open-meteo.com/v1/forecast"
 }
+sl.set_page_config(
+	page_title="Weer Dashboard Nederland",
+	page_icon="🌤️",
+	layout="wide"
+)
+# Helper functions
+def weather_code_to_description(code):
+    return WEATHER_CODES.get(code, "Onbekend")
 
-responses = openmeteo.weather_api(url, params=params)
+def get_current_weather(lat, lon):
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "current": ["temperature_2m", "wind_direction_10m",
+                    "weather_code", "precipitation", "wind_speed_10m"],
+    }
+    res = openmeteo.weather_api(API_URLS["current"], params=params)
+    current = res[0].Current()
+    return pd.DataFrame({
+        "temperature_2m": [current.Variables(0).Value()],
+        "precipitation": [current.Variables(1).Value()],
+        "weather_code": [current.Variables(2).Value()],
+        "wind_speed_10m": [current.Variables(3).Value()],
+    })
 
-# Process 5 locations
-for response in responses:
-	print(f"\nCoordinates: {response.Latitude()}°N {response.Longitude()}°E")
-	print(f"Elevation: {response.Elevation()} m asl")
-	print(f"Timezone: {response.Timezone()}{response.TimezoneAbbreviation()}")
-	print(f"Timezone difference to GMT+0: {response.UtcOffsetSeconds()}s")
+def get_hourly_weather(lat, lon):
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": ["temperature_2m", "precipitation", "wind_speed_10m"],
+        "forecast_days": 1,
+    }
+    res = openmeteo.weather_api(API_URLS["current"], params=params)
+    hourly = res[0].Hourly()
+    return pd.DataFrame({
+        "temperature_2m": hourly.Variables(0).ValuesAsNumpy(),
+        "precipitation": hourly.Variables(1).ValuesAsNumpy(),
+        "wind_speed_10m": hourly.Variables(2).ValuesAsNumpy(),
+    })
 
-	# Process daily data. The order of variables needs to be the same as requested.
-	daily = response.Daily()
-	daily_weather_code = daily.Variables(0).ValuesAsNumpy()
-	daily_temperature_2m_max = daily.Variables(1).ValuesAsNumpy()
-	daily_temperature_2m_min = daily.Variables(2).ValuesAsNumpy()
-	daily_daylight_duration = daily.Variables(3).ValuesAsNumpy()
-	daily_rain_sum = daily.Variables(4).ValuesAsNumpy()
+def get_historical_weather(lat, lon):
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": "2021-01-01",
+        "end_date": "2025-01-01",
+        "daily": [
+            "weather_code",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "daylight_duration",
+            "rain_sum",
+        ],
+    }
+    res = openmeteo.weather_api(API_URLS["historical"], params=params)
+    daily = res[0].Daily()
 
-	daily_data = {"date": pd.date_range(
-		start = pd.to_datetime(daily.Time(), unit = "s", utc = True),
-		end = pd.to_datetime(daily.TimeEnd(), unit = "s", utc = True),
-		freq = pd.Timedelta(seconds = daily.Interval()),
-		inclusive = "left"
-	)}
+    df = pd.DataFrame({
+        "date": pd.date_range(
+            start=pd.to_datetime(daily.Time(), unit="s", utc=True),
+            end=pd.to_datetime(daily.TimeEnd(), unit="s", utc=True),
+            freq=pd.Timedelta(seconds=daily.Interval()),
+            inclusive="left"
+        ),
+        "weather_code": daily.Variables(0).ValuesAsNumpy(),
+        "temperature_2m_max": daily.Variables(1).ValuesAsNumpy(),
+        "temperature_2m_min": daily.Variables(2).ValuesAsNumpy(),
+        "daylight_duration": daily.Variables(3).ValuesAsNumpy(),
+        "rain_sum": daily.Variables(4).ValuesAsNumpy(),
+    })
+    return df
 
-	daily_data["weather_code"] = daily_weather_code
-	daily_data["temperature_2m_max"] = daily_temperature_2m_max
-	daily_data["temperature_2m_min"] = daily_temperature_2m_min
-	daily_data["daylight_duration"] = daily_daylight_duration
-	daily_data["rain_sum"] = daily_rain_sum
+# UI
+sl.title("Weer Dashboard Nederland")
 
-	daily_dataframe = pd.DataFrame(data = daily_data)
+ui.element("p",
+		   "Bekijk het huidige weer, het weer van vandaag en historische neerslaggegevens voor verschillende locaties in Nederland.",
+		   className="text-lg text-neutral-500 mb-4")
 
-
-
-sl.header(f"Neerslag in {city}")
-sl.bar_chart(data=daily_data, x="date", y="rain_sum", y_label="Totaal regenval", x_label="Datum")
-
-
-min_temp = int(daily_dataframe['temperature_2m_min'].min())
-max_temp = int(daily_dataframe['temperature_2m_max'].max())
-
-temp_range = sl.slider(
-	"Temperatuur bereik in ℃", max_value=max_temp, min_value=min_temp, value=(min_temp, max_temp),
-	step=1
+city = ui.tabs(
+    options=list(LOCATIONS.keys()),
+    default_value="De Bilt",
+    key="location_tabs"
 )
 
-min,max = temp_range
-filtered = daily_dataframe[(daily_data['temperature_2m_min'] >= min) & (daily_data['temperature_2m_max'] <= max)].copy()
+lat, lon = LOCATIONS[city]
 
-sl.line_chart(data=filtered, x="date", y=['temperature_2m_min', 'temperature_2m_max'],color=["#7AC2EC","#BB4648" ])
+# Fetch data
+current_weather = get_current_weather(lat, lon)
+hourly_weather = get_hourly_weather(lat, lon)
+historical_weather = get_historical_weather(lat, lon)
+def get_city_image(city):
+      city_images = {
+        "leeuwarden": "https://www.aguidetoleeuwarden.nl/wp-content/uploads/2016/06/0Z3A7603-WEB-1024x682.jpg",
+        "de bilt": "http://photos.wikimapia.org/p/00/07/60/84/26_full.jpg",
+        "zandvoort": "https://rp-online.de/imgs/32/1/6/9/4/9/0/5/6/1/tok_5fcfaf997293bbffd903385d52bce392/w2100_h1313_x1500_y1000_DPA_bfunk_dpa_5FA1FE00C50C84E7-50f8a09b4238adf1.jpg",
+        "maastricht": "https://lp-cms-production.imgix.net/2019-06/GettyImages-514855827_super.jpg?fit=crop&q=40&sharp=10&vib=20&auto=format&ixlib=react-8.6.4",
+        "enschede": "https://media.indebuurt.nl/enschede/2021/03/08134301/oude-markt-enschede-scaled.jpg"
+    }
+      return city_images.get(city.lower(), "")
+
+# Display current weather
+sl.image(get_city_image(city), width='stretch')
+sl.header(f"Huidige weer in {city}")
+
+sl.html('''<style>
+        div[data-testid="stImageContainer"] img {
+          max-height: 300px;
+          object-fit: cover;
+        }</style>
+        ''')
+
+cols = sl.columns(4)
+
+with cols[0]:
+    with ui.card(key="card1"):
+        ui.element("p", "Huidige temperatuur",
+                   className="text-[2rem] text-neutral-400 mb-1")
+        temp = int(current_weather["temperature_2m"][0])
+        ui.element("div", f"{temp} ℃",
+                   className="text-2xl font-medium")
+
+with cols[1]:
+    with ui.card(key="card2"):
+        ui.element("p", "Huidige neerslag",
+                   className="text-[2rem] text-neutral-400 mb-1")
+        precip = int(current_weather["precipitation"][0])
+        ui.element("div", f"{precip} mm",
+                   className="text-2xl font-medium")
+
+with cols[2]:
+    with ui.card(key="card3"):
+        ui.element("p", "Huidige weercode",
+                   className="text-[2rem] text-neutral-400 mb-1")
+        code = int(current_weather["weather_code"][0])
+        description = weather_code_to_description(code)
+        ui.element("div", description,
+                   className="text-2xl font-medium")
+with cols[3]:
+	with ui.card(key="card4"):
+		ui.element("p", "Huidige windsnelheid",
+				   className="text-[2rem] text-neutral-400 mb-1")
+		wind_speed = float(current_weather["wind_speed_10m"][0])
+		ui.element("div", f"{wind_speed} km/u",
+				   className="text-2xl font-medium")
 
 
-# Bereken de gemiddelde dagtemperatuur
-filtered['temperature_2m_mean'] = (filtered['temperature_2m_min'] + filtered['temperature_2m_max']) / 2
 
-# Maak een line chart met de gemiddelde temperatuur en de regenval
-sl.header(f"Gemiddelde Temperatuur en Regenval in {city}")
+# Display today's weather
+sl.header(f"Weer van vandaag in {city}")
+sl.bar_chart(data=hourly_weather, y="precipitation", color="#4A90E2",
+             y_label="Neerslag (mm)", x_label="Uur",
+             use_container_width=True)
+sl.line_chart(data=hourly_weather, y="temperature_2m", color="#E94E77",
+              y_label="Temperatuur (℃)", x_label="Uur",
+              use_container_width=True)
+sl.line_chart(data=hourly_weather, y="wind_speed_10m", color="#50E3C2",
+              y_label="Windsnelheid (km/u)", x_label="Uur",
+              use_container_width=True)
+
+# Display historical data
+sl.header(f"Neerslag in {city}")
+sl.bar_chart(data=historical_weather, x="date", y="rain_sum",
+             y_label="Totaal regenval (mm)", x_label="Datum",
+             use_container_width=True)
+
+# Temperature filter
+min_temp = int(historical_weather["temperature_2m_min"].min())
+max_temp = int(historical_weather["temperature_2m_max"].max())
+
+temp_range = sl.slider(
+    "Temperatuur bereik in ℃",
+    min_value=min_temp,
+    max_value=max_temp,
+    value=(min_temp, max_temp),
+    step=1
+)
+
+min_selected, max_selected = temp_range
+filtered = historical_weather[
+    (historical_weather["temperature_2m_min"] >= min_selected) &
+    (historical_weather["temperature_2m_max"] <= max_selected)
+]
+
 sl.line_chart(
     data=filtered,
     x="date",
-    y=['temperature_2m_mean', 'rain_sum'],
-    color=["#5DADE2", "#2ECC71"]  # Voorbeeldkleuren: blauw voor temp, groen voor regen
+    y=["temperature_2m_min", "temperature_2m_max"],
+    color=["#7AC2EC", "#BB4648"]
 )
-
-
-import requests_cache
-from retry_requests import retry
-import numpy as np
-import pandas as pd
-import openmeteo_requests
-import streamlit as sl
-import folium
-from streamlit_folium import folium_static
-
-# --- 1. Setup en API Parameters Aanpassen ---
-cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
-retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-openmeteo = openmeteo_requests.Client(session = retry_session)
-
-url = "https://api.open-meteo.com/v1/forecast"
-params = {
-    "latitude": [52.1, 50.8483, 52.2183, 53.2014, 52.3713],
-    "longitude": [5.1833, 5.6889, 6.8958, 5.8086, 4.5331],
-    "hourly": "precipitation_probability",
-    # NIEUW: Voeg de huidige temperatuur (op 2m hoogte) toe
-    "current": "temperature_2m",
-    "forecast_days": 1,
-}
-responses = openmeteo.weather_api(url, params=params)
-
-# Definieer de steden (aanname voor de coördinaten)
-locations_info = [
-    {"city": "De Bilt", "lat": 52.1, "lon": 5.1833},
-    {"city": "Maastricht", "lat": 50.8483, "lon": 5.6889},
-    {"city": "Enschede", "lat": 52.2183, "lon": 6.8958},
-    {"city": "Leeuwarden", "lat": 53.2014, "lon": 5.8086},
-    {"city": "Zandvoort", "lat": 52.3713, "lon": 4.5331},
-]
-
-summary_data = []
-
-# --- 2. Dataverwerking, inclusief Huidige Temperatuur ---
-for i, response in enumerate(responses):
-    city_info = locations_info[i]
-
-    # Haal de huidige temperatuur op uit het 'current' blok
-    current = response.Current()
-    # De temperatuur variabele is de eerste (index 0) in het 'current' blok
-    current_temperature = current.Variables(0).Value()
-
-    # Bereken Gem. Neerslagkans (zoals eerder)
-    hourly = response.Hourly()
-    hourly_precipitation_probability = hourly.Variables(0).ValuesAsNumpy()
-    mean_precipitation_probability = np.mean(hourly_precipitation_probability)
-
-    # Voeg alle data toe aan de samenvatting
-    summary_data.append({
-        "city": city_info["city"],
-        "lat": response.Latitude(),
-        "lon": response.Longitude(),
-        "Huidige Temp. (°C)": f"{current_temperature:.1f}", # Nieuw veld
-        "Gem. Kans Neerslag (%)": f"{mean_precipitation_probability:.2f}"
-    })
-
-summary_df = pd.DataFrame(summary_data)
-
-# --- 3. Streamlit Weergave met Folium Pop-up Updaten ---
-
-sl.header("Weersverwachting Overzicht 🌦️")
-sl.subheader("Interactieve Kaart met Weerdata")
-
-# Bepaal het midden van de kaart voor de initiële weergave
-center_lat = summary_df['lat'].mean()
-center_lon = summary_df['lon'].mean()
-
-# Maak een Folium kaart aan
-m = folium.Map(location=[center_lat, center_lon], zoom_start=7)
-
-# Voeg markers toe met bijgewerkte pop-up
-for index, row in summary_df.iterrows():
-    # NIEUW: De tekst die in de pop-up verschijnt bevat nu beide waarden
-    popup_html = f"""
-    <h4>{row['city']}</h4>
-    <hr style='margin: 5px 0;'>
-    <b>Huidige Temperatuur:</b> {row['Huidige Temp. (°C)']}°C<br>
-    <b>Gemiddelde Neerslagkans:</b> {row['Gem. Kans Neerslag (%)']}%
-    """
-
-    folium.Marker(
-        location=[row['lat'], row['lon']],
-        popup=folium.Popup(popup_html, max_width=300),
-        tooltip=f"{row['city']}: {row['Huidige Temp. (°C)']}°C" # Korte tooltip bij hoveren
-    ).add_to(m)
-
-# Toon de Folium kaart in Streamlit
-folium_static(m)
-
-
-
-
-# Choose rain types
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# sl.header(f"Gemiddelde zonlichturen in {city}")
-# daily_dataframe["year"] = daily_dataframe["date"].dt.year
-# daily_dataframe["month"] = daily_dataframe["date"].dt.month
-# year = sl.selectbox(
-#     "Selecteer jaar",
-#     options=sorted(daily_dataframe["year"].unique()),
-# )
-
-# filtered = daily_dataframe[
-#     (daily_dataframe["year"] == year) & (daily_dataframe["month"] == month)
-# ].copy()
-
-# sl.line_chart(
-#     data=filtered,
-#     x="date",
-#     y="daylight_duration",
-#     y_label="Gemiddelde zonlichturen",
-#     x_label="Datum",
-#     color="#F8C57C",
-# )
-# sl.map(data=daily_data)
