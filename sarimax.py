@@ -5,6 +5,8 @@ import openmeteo_requests as omr
 import requests_cache
 from retry_requests import retry
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.ar_model import AutoReg
+from statsmodels.tsa.arima.model import ARIMA
 
 cache_session = requests_cache.CachedSession('.cache', expire_after=3600)
 retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
@@ -77,11 +79,24 @@ def fetch_forecast_data(lat, lon, hours=48):
     return df.set_index("date")
 
 
+def fit_ar_model(df, column, lags=24):
+
+    model = AutoReg(df[column], lags=lags)
+    return model.fit()
+
+
+def fit_arma_model(df, column, order=(1, 1)):
+
+    model = ARIMA(df[column], order=(order[0], 0, order[1]))
+    return model.fit()
+
+
 def fit_sarimax_univariate(df, column, order, seasonal_order):
 
     model = SARIMAX(
         df[column], order=order, seasonal_order=seasonal_order
     )
+
     return model.fit(disp=False)
 
 
@@ -114,6 +129,10 @@ def generate_sarimax_forecast(
         historical, "temperature_2m", order,
         seasonal_order, ["precipitation", "wind_speed_10m"]
     )
+    model_ar = fit_ar_model(historical, "temperature_2m", lags=24)
+    model_arma = fit_arma_model(historical, "temperature_2m",
+                                order=(1, 1))
+
 
     # Generate forecasts
     last_date = historical.index[-1]
@@ -130,12 +149,22 @@ def generate_sarimax_forecast(
     )
     pred_exog.index = forecast_idx
 
+    pred_ar = model_ar.forecast(steps=hours)
+    pred_ar.index = forecast_idx
+
+    pred_arma = model_arma.forecast(steps=hours)
+    pred_arma.index = forecast_idx
+
     # Calculate metrics
     actual_temps = forecast_actual["temperature_2m"].values
     mae_uni = np.mean(np.abs(pred_uni.values - actual_temps))
     rmse_uni = np.sqrt(np.mean((pred_uni.values - actual_temps) ** 2))
     mae_exog = np.mean(np.abs(pred_exog.values - actual_temps))
     rmse_exog = np.sqrt(np.mean((pred_exog.values - actual_temps) ** 2))
+    mae_ar = np.mean(np.abs(pred_ar.values - actual_temps))
+    rmse_ar = np.sqrt(np.mean((pred_ar.values - actual_temps) ** 2))
+    mae_arma = np.mean(np.abs(pred_arma.values - actual_temps))
+    rmse_arma = np.sqrt(np.mean((pred_arma.values - actual_temps) ** 2))
 
     model_choice = pred_exog if use_exog else pred_uni
 
@@ -143,11 +172,17 @@ def generate_sarimax_forecast(
         "forecast": model_choice,
         "actual": forecast_actual,
         "univariate": pred_uni,
+        "ar": pred_ar,
+        "arma": pred_arma,
         "metrics": {
             "mae_univariate": mae_uni,
             "rmse_univariate": rmse_uni,
             "mae_exog": mae_exog,
             "rmse_exog": rmse_exog,
+            "mae_ar": mae_ar,
+            "rmse_ar": rmse_ar,
+            "mae_arma": mae_arma,
+            "rmse_arma": rmse_arma,
         },
         "historical": historical,
     }

@@ -410,15 +410,19 @@ try:
         "SARIMAX (met Wind & Regen)": (
             forecast_result["forecast"].values
         ),
+        "ARMA Model": forecast_result["arma"].values,
+        "AR Model": forecast_result["ar"].values,
     }, index=forecast_result["actual"].index)
 
-    # Display metrics
-    col1, col2, col3, col4 = st.columns(4)
+
+    row1 = st.columns(4)
+    row2 = st.columns(4)
     metrics = forecast_result["metrics"]
 
-    with col1:
+
+    with row1[0]:
         with ui.card(key="metric_mae_uni"):
-            ui.element("p", "MAE (Univariate)",
+            ui.element("p", "MAE Alleen Temp",
                        className="text-sm text-neutral-400 mb-1")
             ui.element(
                 "div",
@@ -426,19 +430,9 @@ try:
                 className="text-xl font-medium"
             )
 
-    with col2:
-        with ui.card(key="metric_rmse_uni"):
-            ui.element("p", "RMSE (Univariate)",
-                       className="text-sm text-neutral-400 mb-1")
-            ui.element(
-                "div",
-                f"{metrics['rmse_univariate']:.2f}°C",
-                className="text-xl font-medium"
-            )
-
-    with col3:
+    with row1[1]:
         with ui.card(key="metric_mae_exog"):
-            ui.element("p", "MAE (met Exog)",
+            ui.element("p", "MAE met wind & regen",
                        className="text-sm text-neutral-400 mb-1")
             ui.element(
                 "div",
@@ -446,9 +440,40 @@ try:
                 className="text-xl font-medium"
             )
 
-    with col4:
+    with row1[2]:
+        with ui.card(key="metric_mae_arma"):
+            ui.element("p", "MAE ARMA Model",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['mae_arma']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
+    with row1[3]:
+        with ui.card(key="metric_mae_ar"):
+            ui.element("p", "MAE AR Model",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['mae_ar']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
+    # Second row: RMSE metrics
+    with row2[0]:
+        with ui.card(key="metric_rmse_uni"):
+            ui.element("p", "RMSE alleen temp",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['rmse_univariate']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
+    with row2[1]:
         with ui.card(key="metric_rmse_exog"):
-            ui.element("p", "RMSE (met Exog)",
+            ui.element("p", "RMSE (met wind & regen)",
                        className="text-sm text-neutral-400 mb-1")
             ui.element(
                 "div",
@@ -456,11 +481,31 @@ try:
                 className="text-xl font-medium"
             )
 
+    with row2[2]:
+        with ui.card(key="metric_rmse_arma"):
+            ui.element("p", "RMSE ARMA Model",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['rmse_arma']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
+    with row2[3]:
+        with ui.card(key="metric_rmse_ar"):
+            ui.element("p", "RMSE AR Model",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['rmse_ar']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
     # Plot forecast comparison
     st.subheader("Temperatuurvergelijking: 48u Voorspelling")
     st.line_chart(
         data=comparison_df,
-        color=["#2ECC71", "#E74C3C", "#9B59B6"],
+        color=["#2ECC71", "#E74C3C", "#9B59B6", "#3498DB", "#F1C40F"],
         use_container_width=True,
         y_label="Temperatuur (°C)",
     )
@@ -479,7 +524,7 @@ try:
 
     st.line_chart(
         data=combined,
-        color=["#3498DB", "#2ECC71", "#E74C3C", "#9B59B6"],
+        color=["#2ECC71", "#E74C3C", "#9B59B6", "#3498DB", "#F1C40F", "#95A5A6"],
         use_container_width=True,
         y_label="Temperatuur (°C)",
     )

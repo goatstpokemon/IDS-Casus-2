@@ -15,6 +15,7 @@ locations: dict[str, tuple[float, float]] = {
     "Enschede": (52.2183, 6.8958),
 }
 
+st.title("Temperatuur & Regenval Vergelijken")
 
 # ---------- Function to fetch data ----------
 @st.cache_data(show_spinner=False)
@@ -100,6 +101,8 @@ data_per_city: dict[str, pd.DataFrame] = {}
 for city in selected:
     lat, lon = locations[city]
     data_per_city[city] = load_city_data(city, lat, lon)
+
+
 
 # Guard: if any city failed to load
 if not data_per_city:
