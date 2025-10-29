@@ -7,7 +7,7 @@ import streamlit as st
 import folium
 from streamlit_folium import folium_static
 import streamlit_shadcn_ui as ui
-
+from sarimax import generate_sarimax_forecast
 # Setup the Open-Meteo API client with cache and retry on error
 cache_session = requests_cache.CachedSession(".cache", expire_after=3600)
 retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
@@ -392,3 +392,97 @@ for _, row in summary_df.iterrows():
     ).add_to(m)
 
 folium_static(m)
+
+try:
+    with st.spinner(
+        f"SARIMAX-Model wordt voor {city} berekend..."
+    ):
+        forecast_result = generate_sarimax_forecast(
+            lat, lon, hours=48, use_exog=True
+        )
+
+    # Create comparison dataframe
+    comparison_df = pd.DataFrame({
+        "Open-Meteo": forecast_result["actual"][
+            "temperature_2m"
+        ].values,
+        "SARIMAX (Univariate)": forecast_result["univariate"].values,
+        "SARIMAX (met Wind & Regen)": (
+            forecast_result["forecast"].values
+        ),
+    }, index=forecast_result["actual"].index)
+
+    # Display metrics
+    col1, col2, col3, col4 = st.columns(4)
+    metrics = forecast_result["metrics"]
+
+    with col1:
+        with ui.card(key="metric_mae_uni"):
+            ui.element("p", "MAE (Univariate)",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['mae_univariate']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
+    with col2:
+        with ui.card(key="metric_rmse_uni"):
+            ui.element("p", "RMSE (Univariate)",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['rmse_univariate']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
+    with col3:
+        with ui.card(key="metric_mae_exog"):
+            ui.element("p", "MAE (mit Exog)",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['mae_exog']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
+    with col4:
+        with ui.card(key="metric_rmse_exog"):
+            ui.element("p", "RMSE (mit Exog)",
+                       className="text-sm text-neutral-400 mb-1")
+            ui.element(
+                "div",
+                f"{metrics['rmse_exog']:.2f}°C",
+                className="text-xl font-medium"
+            )
+
+    # Plot forecast comparison
+    st.subheader("Temperatuurvergelijking: 48u Voorspelling")
+    st.line_chart(
+        data=comparison_df,
+        color=["#2ECC71", "#E74C3C", "#9B59B6"],
+        use_container_width=True,
+        y_label="Temperatuur (°C)",
+    )
+
+    # Plot with historical context
+    st.subheader("Voorspelling met Historische Context")
+    last_7_days = forecast_result["historical"][
+        -168:
+    ].copy()
+    last_7_days.columns = ["Historisch (Temp)", "Precip", "Wind"]
+
+    combined = pd.concat([
+        last_7_days[["Historisch (Temp)"]],
+        comparison_df,
+    ], axis=0)
+
+    st.line_chart(
+        data=combined,
+        color=["#3498DB", "#2ECC71", "#E74C3C", "#9B59B6"],
+        use_container_width=True,
+        y_label="Temperatuur (°C)",
+    )
+
+except Exception as e:
+    st.error(f"Fout bij het berekenen van de voorspelling: {str(e)}")
