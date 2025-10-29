@@ -438,7 +438,7 @@ try:
 
     with col3:
         with ui.card(key="metric_mae_exog"):
-            ui.element("p", "MAE (mit Exog)",
+            ui.element("p", "MAE (met Exog)",
                        className="text-sm text-neutral-400 mb-1")
             ui.element(
                 "div",
@@ -448,7 +448,7 @@ try:
 
     with col4:
         with ui.card(key="metric_rmse_exog"):
-            ui.element("p", "RMSE (mit Exog)",
+            ui.element("p", "RMSE (met Exog)",
                        className="text-sm text-neutral-400 mb-1")
             ui.element(
                 "div",
