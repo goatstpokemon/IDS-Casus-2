@@ -11,12 +11,11 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import requests
-from datetime import datetime, timedelta
 import imageio
 from PIL import Image, ImageDraw
-from io import BytesIO
 from sarimax import generate_sarimax_forecast
-
+from branca.element import MacroElement
+from jinja2 import Template
 # Cache session setup
 cache_session = requests_cache.CachedSession(
     ".cache", expire_after=3600
@@ -95,7 +94,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🌤️ Weer Dashboard Nederland")
+st.title("Weer Dashboard Nederland")
 st.markdown(
     "Interactief weersdashboard met real-time data, prognoses en "
     "historische analyses voor steden in Nederland."
@@ -135,7 +134,7 @@ def get_hourly_weather(lat, lon):
         "latitude": lat,
         "longitude": lon,
         "hourly": ["temperature_2m", "precipitation",
-                   "wind_speed_10m"],
+                "wind_speed_10m"],
         "forecast_days": 1,
     }
     res = openmeteo.weather_api(API_URLS["current"], params=params)
@@ -235,7 +234,7 @@ def generate_rain_animation():
 
         # Draw gradient background based on precipitation
         color = (50 + precip // 5, 100 + precip // 10,
-                 150 + precip // 20)
+                150 + precip // 20)
         draw.rectangle([0, 0, 600, 400], fill=color)
 
         # Draw rain clouds (circles)
@@ -254,7 +253,7 @@ def generate_rain_animation():
             x = np.random.randint(0, 600)
             y = np.random.randint(0, 400)
             draw.line([(x, y), (x - 2, y + 10)], fill=(0, 100, 255),
-                      width=2)
+                    width=2)
 
         frames.append(np.array(img))
 
@@ -268,7 +267,7 @@ def generate_rain_animation():
 # SECTIE 1: TEMPERATUURKAART NEDERLAND
 # ============================================================================
 
-st.header("📍 Temperatuurkaart Nederland")
+st.header("Temperatuurkaart Nederland")
 st.markdown(
     "Actuele temperatuurverdeling over Nederland met CartoPy "
     "visualisatie."
@@ -315,12 +314,19 @@ st.divider()
 # SECTIE 3: INTERACTIEVE KAART MET WEERDATA
 # ============================================================================
 
-st.header("🗺️ Weersverwachting Overzicht")
+st.header("Weersverwachting Overzicht")
 st.markdown(
     "Interactieve kaart met huidige weergegevens voor alle "
     "geselecteerde steden."
 )
+st.header("Selecteer een Locatie")
+st.markdown("Kies een stad voor gedetailleerde weergegevens.")
 
+city = ui.tabs(
+    options=list(LOCATIONS.keys()),
+    default_value="De Bilt",
+    key="location_tabs"
+)
 params_current = {
     "latitude": [loc["lat"] for loc in LOCATIONS_INFO],
     "longitude": [loc["lon"] for loc in LOCATIONS_INFO],
@@ -365,19 +371,50 @@ for _, row in summary_df.iterrows():
     <b>Neerslag:</b> {row['precipitation']:.1f} mm<br>
     <b>Neerslagkans:</b> {row['precipitation_probability']:.0f}%
     """
-    marker_color = "red" if row["city"] == "De Bilt" else "blue"
+    marker_color = "red" if row["city"] == city else "blue"
 
     folium.Marker(
         location=[row["lat"], row["lon"]],
         popup=folium.Popup(popup_html, max_width=300),
-        tooltip=(
-            f"{row['city']}: {row['temperature']:.1f}°C, "
-            f"{row['precipitation']:.1f}mm"
-        ),
-        icon=folium.Icon(color=marker_color,
-                         icon="")
+        tooltip=f"{row['city']}: {row['temperature']:.1f}°C, {row['precipitation']:.1f}mm",
+        icon=folium.Icon(color=marker_color, icon="")
     ).add_to(m)
 
+class FloatLegend(MacroElement):
+    _template = Template(u"""
+        {% macro html(this, kwargs) %}
+        <div id='{{this.get_name()}}' style="
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            z-index: 9999;
+            background: white;
+            padding: 10px 12px;
+            border: 1px solid #bbb;
+            border-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            font-size: 14px;
+            line-height: 1.4;
+        ">
+          <div style="font-weight: 600; margin-bottom: 6px;">Legenda</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="display:inline-block; width:14px; height:14px; background:#d33; border-radius:3px;"></span>
+            <span>Huidige locatie</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="display:inline-block; width:14px; height:14px; background:#2a81cb; border-radius:3px;"></span>
+            <span>Overige locaties</span>
+          </div>
+        </div>
+        {% endmacro %}
+    """)
+
+    def __init__(self, name=None):
+        super().__init__()
+        self._name = name or "float_legend"
+
+
+m.add_child(FloatLegend())
 folium_static(m)
 
 st.divider()
@@ -386,20 +423,14 @@ st.divider()
 # SECTIE 4: LOCATIE SELECTIE & HUIDGE WEER
 # ============================================================================
 
-st.header("🌡️ Selecteer een Locatie")
-st.markdown("Kies een stad voor gedetailleerde weergegevens.")
 
-city = ui.tabs(
-    options=list(LOCATIONS.keys()),
-    default_value="De Bilt",
-    key="location_tabs"
-)
 
 lat, lon = LOCATIONS[city]
-
+st.subheader(f"Huidige Weer in {city}")
 image_url = get_city_image(city)
 if image_url:
     st.image(image_url, use_container_width=True)
+    st.markdown(f"#### bron: {image_url}")
     st.html('''<style>
         div[data-testid="stImageContainer"] img {
             max-height: 300px;
@@ -411,33 +442,33 @@ current_weather = get_current_weather(lat, lon)
 hourly_weather = get_hourly_weather(lat, lon)
 historical_weather = get_historical_weather(lat, lon)
 
-st.subheader(f"Huidige Weer in {city}")
+
 cols = st.columns(3)
 
 with cols[0]:
     with ui.card(key="card1"):
         ui.element("p", "Temperatuur",
-                   className="text-sm text-neutral-400 mb-1")
+                className="text-sm text-neutral-400 mb-1")
         temp = int(current_weather["temperature_2m"][0])
         ui.element("div", f"{temp}℃",
-                   className="text-3xl font-bold")
+                className="text-3xl font-bold")
 
 with cols[1]:
     with ui.card(key="card2"):
         ui.element("p", "Neerslag",
-                   className="text-sm text-neutral-400 mb-1")
+                className="text-sm text-neutral-400 mb-1")
         precip = int(current_weather["precipitation"][0])
         ui.element("div", f"{precip} mm",
-                   className="text-3xl font-bold")
+                className="text-3xl font-bold")
 
 with cols[2]:
     with ui.card(key="card3"):
         ui.element("p", "Weercode",
-                   className="text-sm text-neutral-400 mb-1")
+                className="text-sm text-neutral-400 mb-1")
         code = int(current_weather["weather_code"][0])
         description = weather_code_to_description(code)
         ui.element("div", description,
-                   className="text-lg font-medium")
+                className="text-lg font-medium")
 
 st.divider()
 
@@ -445,27 +476,27 @@ st.divider()
 # SECTIE 5: DAGVERLOPEN & HISTORISCHE DATA
 # ============================================================================
 
-st.header("📊 Weergegevens van Vandaag")
+st.header("Weergegevens van Vandaag")
 
 st.subheader(f"Neerslag in {city}")
 st.bar_chart(data=hourly_weather, y="precipitation",
-             color="#4A90E2", use_container_width=True)
+            color="#4A90E2", use_container_width=True)
 
 st.subheader(f"Temperatuur in {city}")
 st.line_chart(data=hourly_weather, y="temperature_2m",
-              color="#E94E77", use_container_width=True)
+            color="#E94E77", use_container_width=True)
 
 st.subheader(f"Windsnelheid in {city}")
 st.line_chart(data=hourly_weather, y="wind_speed_10m",
-              color="#50E3C2", use_container_width=True)
+            color="#50E3C2", use_container_width=True)
 
 st.divider()
 
-st.header("📈 Historische Gegevens")
+st.header("Historische Gegevens")
 
 st.subheader(f"Neerslag in {city}")
 st.bar_chart(data=historical_weather, x="date", y="rain_sum",
-             use_container_width=True)
+            use_container_width=True)
 
 min_temp = int(historical_weather["temperature_2m_min"].min())
 max_temp = int(historical_weather["temperature_2m_max"].max())
@@ -495,7 +526,7 @@ st.line_chart(
 
 filtered["temperature_2m_mean"] = (
     (filtered["temperature_2m_min"] +
-     filtered["temperature_2m_max"]) / 2
+    filtered["temperature_2m_max"]) / 2
 )
 
 st.subheader(f"Gemiddelde Temperatuur en Regenval in {city}")
@@ -513,7 +544,7 @@ st.divider()
 # SECTIE 6: SARIMAX FORECAST
 # ============================================================================
 
-st.header("🔮 Temperatuurverwachting (48 uur)")
+st.header("Temperatuurverwachting (48 uur)")
 
 try:
     with st.spinner(
@@ -544,7 +575,7 @@ try:
     with row1[0]:
         with ui.card(key="metric_mae_uni"):
             ui.element("p", "MAE Alleen Temp",
-                       className="text-xs text-neutral-400 mb-1")
+                    className="text-xs text-neutral-400 mb-1")
             ui.element(
                 "div",
                 f"{metrics['mae_univariate']:.2f}°C",
@@ -554,7 +585,7 @@ try:
     with row1[1]:
         with ui.card(key="metric_mae_exog"):
             ui.element("p", "MAE met wind & regen",
-                       className="text-xs text-neutral-400 mb-1")
+                    className="text-xs text-neutral-400 mb-1")
             ui.element(
                 "div",
                 f"{metrics['mae_exog']:.2f}°C",
@@ -564,7 +595,7 @@ try:
     with row1[2]:
         with ui.card(key="metric_mae_arma"):
             ui.element("p", "MAE ARMA Model",
-                       className="text-xs text-neutral-400 mb-1")
+                    className="text-xs text-neutral-400 mb-1")
             ui.element(
                 "div",
                 f"{metrics['mae_arma']:.2f}°C",
@@ -574,7 +605,7 @@ try:
     with row1[3]:
         with ui.card(key="metric_mae_ar"):
             ui.element("p", "MAE AR Model",
-                       className="text-xs text-neutral-400 mb-1")
+                    className="text-xs text-neutral-400 mb-1")
             ui.element(
                 "div",
                 f"{metrics['mae_ar']:.2f}°C",
@@ -584,7 +615,7 @@ try:
     with row2[0]:
         with ui.card(key="metric_rmse_uni"):
             ui.element("p", "RMSE alleen temp",
-                       className="text-xs text-neutral-400 mb-1")
+                    className="text-xs text-neutral-400 mb-1")
             ui.element(
                 "div",
                 f"{metrics['rmse_univariate']:.2f}°C",
@@ -594,7 +625,7 @@ try:
     with row2[1]:
         with ui.card(key="metric_rmse_exog"):
             ui.element("p", "RMSE (met wind & regen)",
-                       className="text-xs text-neutral-400 mb-1")
+                    className="text-xs text-neutral-400 mb-1")
             ui.element(
                 "div",
                 f"{metrics['rmse_exog']:.2f}°C",
@@ -604,7 +635,7 @@ try:
     with row2[2]:
         with ui.card(key="metric_rmse_arma"):
             ui.element("p", "RMSE ARMA Model",
-                       className="text-xs text-neutral-400 mb-1")
+                    className="text-xs text-neutral-400 mb-1")
             ui.element(
                 "div",
                 f"{metrics['rmse_arma']:.2f}°C",
@@ -614,18 +645,56 @@ try:
     with row2[3]:
         with ui.card(key="metric_rmse_ar"):
             ui.element("p", "RMSE AR Model",
-                       className="text-xs text-neutral-400 mb-1")
+                    className="text-xs text-neutral-400 mb-1")
             ui.element(
                 "div",
                 f"{metrics['rmse_ar']:.2f}°C",
                 className="text-lg font-medium"
             )
 
+    model_distances = {
+        "SARIMAX (Univariate)": np.mean(
+            np.abs(
+                forecast_result["univariate"].values -
+                forecast_result["actual"]["temperature_2m"].values
+            )
+        ),
+        "SARIMAX (met Wind & Regen)": np.mean(
+            np.abs(
+                forecast_result["forecast"].values -
+                forecast_result["actual"]["temperature_2m"].values
+            )
+        ),
+        "ARMA Model": np.mean(
+            np.abs(
+                forecast_result["arma"].values -
+                forecast_result["actual"]["temperature_2m"].values
+            )
+        ),
+        "AR Model": np.mean(
+            np.abs(
+                forecast_result["ar"].values -
+                forecast_result["actual"]["temperature_2m"].values
+            )
+        ),
+    }
+
+    best_model = min(model_distances, key=model_distances.get)
+    best_distance = model_distances[best_model]
+
+    st.markdown(
+        f"**Beste Model:** {best_model} "
+    )
+    st.markdown(
+        f"**Beste Model:** {best_model} "
+        f"(gemiddelde afwijking: {best_distance:.2f}°C)"
+    )
+
     st.subheader("Temperatuurvergelijking: 48u Voorspelling")
     st.line_chart(
         data=comparison_df,
         color=["#2ECC71", "#E74C3C", "#9B59B6",
-               "#3498DB", "#F1C40F"],
+            "#3498DB", "#F1C40F"],
         use_container_width=True,
     )
 
@@ -647,3 +716,9 @@ except Exception as e:
     st.error(
         f"Fout bij het berekenen van de voorspelling: {str(e)}"
     )
+
+st.subheader("Bronnen")
+st.markdown(
+    "- [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api)\n"
+    "- [Streamlit Documentation](https://docs.streamlit.io/)"
+)

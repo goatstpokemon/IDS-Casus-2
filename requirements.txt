@@ -2,3 +2,5 @@ openmeteo_requests
 streamlit
 pandas
 streamlit_shadcn_ui
+branca
+Jinja2
